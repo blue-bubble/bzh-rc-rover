@@ -35,128 +35,121 @@
 
  NOTE
 
- This program will not verify control data value, 
+ This program will not verify control data value,
  make sure data from rpi are in correct range!!!
- 
+
  ====================================================
 
 */
 
 //soft_reset
-#include <avr/wdt.h>
-void soft_reset()
+#include <avr/wdt.h> //include watch dog library
+void soft_reset() //soft reset by using WDT
 {
-	wdt_enable(WDTO_15MS);
-	while (true);
+        wdt_enable(WDTO_15MS);
+        while (true);
 }
 
-#include <Servo.h>
-Servo servo_1;
-Servo servo_2;
-Servo servo_3;
+#include <Servo.h> //include servo library
+Servo servo_1; //create servo object 1
+Servo servo_2; //create servo object 2
+Servo servo_3; //create servo object 3
 
+//define magic header for easy reading
 #define RESET_MAGIC_HEADER 0xee
 #define CONTROL_DATA_MAGIC_HEADER 0xcd
 #define CONTROL_DATA_ARRAY_SIZE 7
 
-uint8_t control_data[CONTROL_DATA_ARRAY_SIZE];
-
-void debug_echo_control_data()
-{
-	for (unsigned int i = 0; i < CONTROL_DATA_ARRAY_SIZE; i++)
-	{
-		Serial.write(control_data[i]);
-	}
-}
+uint8_t control_data[CONTROL_DATA_ARRAY_SIZE]; //define global array control_data
 
 // the setup function runs once when you press reset or power the board
 void setup()
 {
-	//set pin mode for motor controller
-	//pinMode(3, OUTPUT);
+        //set pin mode for motor controller
+        //pinMode(3, OUTPUT);
 
-	pinMode(5, OUTPUT);
-	pinMode(6, OUTPUT);
+        pinMode(5, OUTPUT);
+        pinMode(6, OUTPUT);
 
-	pinMode(14, OUTPUT);
-	pinMode(15, OUTPUT);
-	pinMode(16, OUTPUT);
-	pinMode(17, OUTPUT);
+        pinMode(14, OUTPUT);
+        pinMode(15, OUTPUT);
+        pinMode(16, OUTPUT);
+        pinMode(17, OUTPUT);
 
-	pinMode(9, OUTPUT);
-	pinMode(10, OUTPUT);
-	pinMode(11, OUTPUT);
+        pinMode(9, OUTPUT);
+        pinMode(10, OUTPUT);
+        pinMode(11, OUTPUT);
 
-	//set pin mode for system LED
-	pinMode(13, OUTPUT);
+        //set pin mode for system LED
+        pinMode(13, OUTPUT);
 
-	//attach servo PWM
-	servo_1.attach(9);
-	servo_2.attach(10);
-	servo_3.attach(11);
+        //attach servo PWM
+        servo_1.attach(9);
+        servo_2.attach(10);
+        servo_3.attach(11);
 
-	//serial port config
-	Serial.begin(115200);
-	Serial.setTimeout(60000);
+        //serial port config
+        Serial.begin(115200);
+        Serial.setTimeout(60000);
 
-	//send init done
-	delay(50);
-	Serial.write('i'); //0x69
+        //send init done
+        delay(50);
+        Serial.write('i'); //0x69
 
-	servo_1.write(90);
-	servo_2.write(180);
-	servo_3.write(90);
+        //move servo to default position
+        servo_1.write(90);
+        servo_2.write(180);
+        servo_3.write(30);
 }
 
 // the loop function runs over and over again until power down or reset
 void loop()
 {
-	//require control data
-	Serial.write('r'); //0x72
+        //require control data
+        Serial.write('r'); //0x72
 
-	Serial.readBytes(control_data, CONTROL_DATA_ARRAY_SIZE);
+        Serial.readBytes(control_data, CONTROL_DATA_ARRAY_SIZE);
 
-	//magic header verify
-	if (control_data[0] == RESET_MAGIC_HEADER)
-	{
-		digitalWrite(13, HIGH);
-		digitalWrite(13, !(bool)digitalRead(13));
-		soft_reset();
-	}
-	else if (control_data[0] == CONTROL_DATA_MAGIC_HEADER)
-	{
-		//valid control data magic code
-		//process control data
+        //magic header verify
+        if (control_data[0] == RESET_MAGIC_HEADER)
+        {
+                //valid soft reset magic code
+                //process control data
+                digitalWrite(13, HIGH);
+                digitalWrite(13, !(bool)digitalRead(13));
+                soft_reset();
+        }
+        else if (control_data[0] == CONTROL_DATA_MAGIC_HEADER)
+        {
+                //valid control data magic code
+                //process control data
 
-		//servo motor
-		servo_1.write(control_data[1]);
-		servo_2.write(control_data[2]);
-		servo_3.write(control_data[3]);
+                //servo motor
+                servo_1.write(control_data[1]);
+                servo_2.write(control_data[2]);
+                servo_3.write(control_data[3]);
 
-		//normal motor
-		//control_data[4] &= 0x03;
-		digitalWrite(14, (control_data[4] >> 1) & 0x01);
-		digitalWrite(15, !(bool)((control_data[4] >> 1) & 0x01));
-		digitalWrite(16, control_data[4] & 0x01);
-		digitalWrite(17, !(bool)(control_data[4] & 0x01));
+                //DC motor
+                //control_data[4] &= 0x03;
+                digitalWrite(14, (control_data[4] >> 1) & 0x01);
+                digitalWrite(15, !(bool)((control_data[4] >> 1) & 0x01));
+                digitalWrite(16, control_data[4] & 0x01);
+                digitalWrite(17, !(bool)(control_data[4] & 0x01));
 
-		analogWrite(5, control_data[5]);
-		analogWrite(6, control_data[6]);
+                //PWM for DC motor
+                analogWrite(5, control_data[5]);
+                analogWrite(6, control_data[6]);
+        }
+        else
+        {
+                Serial.write('f'); //0x66
+                digitalWrite(13, HIGH);
 
-		//debug_echo_control_data();
-	}
-	else
-	{
-		Serial.write('f'); //0x66
-		digitalWrite(13, HIGH);
-		/*
-		uint8_t useless_buffer[64];
-		Serial.readBytes(useless_buffer, 64);
-		*/
-		while (Serial.available() > 0)
-		{
-			Serial.read();
-		}
-		digitalWrite(13, LOW);
-	}
+                //read until buffer is empty
+                while (Serial.available() > 0)
+                {
+                        Serial.read();
+                }
+                digitalWrite(13, LOW);
+        }
 }
